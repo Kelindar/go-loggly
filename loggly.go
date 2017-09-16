@@ -1,7 +1,6 @@
 package loggly
 
-import . "github.com/visionmedia/go-debug"
-import . "encoding/json"
+import "encoding/json"
 import "io/ioutil"
 import "net/http"
 import "strings"
@@ -17,8 +16,6 @@ const Version = "0.4.3"
 const api = "https://logs-01.loggly.com/bulk/{token}"
 
 type Message map[string]interface{}
-
-var debug = Debug("loggly")
 
 var nl = []byte{'\n'}
 
@@ -96,7 +93,7 @@ func (c *Client) Send(msg Message) error {
 	}
 	merge(msg, c.Defaults)
 
-	json, err := Marshal(msg)
+	json, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
@@ -109,8 +106,6 @@ func (c *Client) Send(msg Message) error {
 	}
 
 	c.buffer = append(c.buffer, json)
-
-	debug("buffer (%d/%d) %v", len(c.buffer), c.BufferSize, msg)
 
 	if len(c.buffer) >= c.BufferSize {
 		go c.Flush()
@@ -130,7 +125,6 @@ func (c *Client) Write(b []byte) (int, error) {
 
 	c.buffer = append(c.buffer, b)
 
-	debug("buffer (%d/%d) %q", len(c.buffer), c.BufferSize, b)
 
 	if len(c.buffer) >= c.BufferSize {
 		go c.Flush()
@@ -224,22 +218,18 @@ func (c *Client) Flush() error {
 	c.Lock()
 
 	if len(c.buffer) == 0 {
-		debug("no messages to flush")
 		c.Unlock()
 		return nil
 	}
 
-	debug("flushing %d messages", len(c.buffer))
 	body := bytes.Join(c.buffer, nl)
 
 	c.buffer = nil
 	c.Unlock()
 
 	client := &http.Client{}
-	debug("POST %s with %d bytes", c.Endpoint, len(body))
 	req, err := http.NewRequest("POST", c.Endpoint, bytes.NewBuffer(body))
 	if err != nil {
-		debug("error: %v", err)
 		return err
 	}
 
@@ -254,16 +244,12 @@ func (c *Client) Flush() error {
 
 	res, err := client.Do(req)
 	if err != nil {
-		debug("error: %v", err)
 		return err
 	}
 
 	defer res.Body.Close()
-
-	debug("%d response", res.StatusCode)
 	if res.StatusCode >= 400 {
-		resp, _ := ioutil.ReadAll(res.Body)
-		debug("error: %s", string(resp))
+		ioutil.ReadAll(res.Body)
 	}
 
 	return err
@@ -291,7 +277,6 @@ func (c *Client) tagsList() string {
 func (c *Client) start() {
 	for {
 		time.Sleep(c.FlushInterval)
-		debug("interval %v reached", c.FlushInterval)
 		c.Flush()
 	}
 }
